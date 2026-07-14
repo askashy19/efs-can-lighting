@@ -175,12 +175,12 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	// Service PineCAN housekeeping (1ms tick-gated pinecan1ms call)
-	CANManager::service();
-
 	while (stay_in_loop) {
 		// placeholder: push the domain pattern
 		// start_pattern();
+
+		// Service PineCAN housekeeping (1ms tick-gated pinecan1ms call)
+		CANManager::service();
 
 		// Re-read the cache each inner iteration so new CAN data is visible
 		raw_vehicle_state = CANManager::getLatestVehicleState();
@@ -254,6 +254,12 @@ void SystemClock_Config(void)
   }
 }
 /* USER CODE BEGIN 4 */
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM6) {
+		pinecan1ms_flag = true;
+	}
+}
 
 /* USER CODE END 4 */
 

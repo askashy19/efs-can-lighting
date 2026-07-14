@@ -107,6 +107,10 @@ public:
     /// Call this from the main while loop with the result of getLatestVehicleState().
     static bool vehicleStateChanged(uint64_t raw_vehicle_state);
 
+    /// Called from the main loop every iteration. Checks pinecan1ms_flag
+    /// and calls pinecan1ms() when set. No-op if not initialized.
+    static void service();
+
     /// (Retained) Bridge to the stored callback, used if a push-delivery
     /// path is re-enabled in future. Not called from handleNotifyState
     /// in the current poll model.
@@ -145,5 +149,9 @@ private:
 /// CANManager::UNRECOGNIZED_STATE (0xFF) if no mapped bit is set.
 /// Call this from the main loop after CANManager::vehicleStateChanged() returns true.
 uint8_t interpretVehicleState(uint64_t vehicle_state);
+
+/// Defined in can_manager.cpp. Set true by HAL_TIM_PeriodElapsedCallback
+/// every 1 ms; cleared and consumed by CANManager::service().
+extern volatile bool pinecan1ms_flag;
 
 #endif /* INC_CAN_MANAGER_HPP_ */
