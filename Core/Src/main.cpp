@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <lighting_demos.hpp>
 #include <string.h>
+#include "can_manager.hpp"
+#include "pinecan_handlers.h"
 
 /* USER CODE END Includes */
 
@@ -22,7 +24,6 @@
 //#define CYCLE_ONE_LED_ON
 //#define CONSTANT_COLOR
 #include "lighting_controller.hpp"
-#include "can_controller.hpp"
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,10 +69,6 @@ void initializeNodeId() {
 	getUniqueID(buffer);
 	uint32_t *parts = (uint32_t *)buffer;
 	node_id = parts[0] ^ parts[1] ^ parts[2];
-}
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-	CANController::onTransferReceived(hcan, CAN_RX_FIFO0);
 }
 
 extern LightingController board;
@@ -156,81 +153,21 @@ int main(void)
 
 	board.configure_active_domains(255);
 
-	//Declare control states
-	LC_State_STARTUP startup_state;
-	LC_State_GROUND ground_state;
-	LC_State_TAXI taxi_state;
-	LC_State_TAKEOFF takeoff_state;
-	LC_State_FLIGHT flight_state;
-	LC_State_BRAKE brake_state;
-	LC_State_LANDING land_state;
+	initializeNodeId();
 
-	uint8_t old_state = 255;
+	// Initialize CANManager — calls pinecanInit internally.
+	// Handler registration is compile-time via RX_HANDLER_LIST in pinecan_handlers.h.
+	if (CANManager::initialize(node_id, &hcan1, nullptr) != PINECAN_OK) {
+		Error_Handler();
+	}
 
-
-	auto set_control_state = [&](uint8_t state) {
-		if (state == old_state) return;
-		if (state != TRANSITION_STARTUP) {
-			board.set_domain_colour_and_brightness(CD_MAIN, PURPLE, 100);
-		}
-		old_state = state;
-		switch (state) {
-		case TRANSITION_STARTUP: {
-			board.set_domain_colour_and_brightness(CD_MAIN, CYAN, 100);
-			board.set_lighting_control_state(&startup_state);
-			break;
-		}
-		case TRANSITION_GROUND: {
-			board.set_lighting_control_state(&ground_state);
-			board.set_domain_colour(CD_BEACON, RED);
-			break;
-		}
-		case TRANSITION_TAXI: {
-			board.set_lighting_control_state(&taxi_state);
-			board.set_domain_colour(CD_BEACON, RED);
-			break;
-		}
-		case TRANSITION_TAKEOFF: {
-			board.set_domain_colour(CD_BEACON, GREEN);
-			board.set_lighting_control_state(&takeoff_state);
-			break;
-		}
-		case TRANSITION_FLIGHT: {
-			board.set_domain_colour(CD_BEACON, RED);
-			board.set_lighting_control_state(&flight_state);
-			break;
-		}
-		case TRANSITION_LANDING: {
-			board.set_domain_colour(CD_BEACON, RED);
-			board.set_lighting_control_state(&land_state);
-			break;
-		}
-		default: {
-			break;
-
-		}
-		}
-	};
-  initializeNodeId();
-  CANController::initialize(
-  	node_id, &hcan1, set_control_state
-  );
-	uint64_t next_1hz_service_at = HAL_GetTick();
-	uint64_t next_10hz_service_at = HAL_GetTick();
-
-	set_control_state(TRANSITION_STARTUP);
-
-
-	// Starts the 1s pulse asap (no weird user setup calls).
-	// I don't think this changes timing at all but maybe it does.
-
-
-	//allow all control domains.
-
-
-//  lighting_control_state_demo();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  uint64_t raw_vehicle_state = 0;
+  bool new_data = false;
+  bool stay_in_loop = true;
+  uint8_t flight_state = 0;
 
   while (1)
   {
@@ -238,20 +175,36 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-		const uint64_t ts = HAL_GetTick();
+	// Service PineCAN housekeeping (1ms tick-gated pinecan1ms call)
+	CANManager::service();
 
-		if (ts >= next_1hz_service_at){
-		  next_1hz_service_at += 1000ULL;
+	while (stay_in_loop) {
+		// placeholder: push the domain pattern
+		// start_pattern();
+
+		// Re-read the cache each inner iteration so new CAN data is visible
+		raw_vehicle_state = CANManager::getLatestVehicleState();
+
+		// Step 2: check if data changed since last call
+		new_data = CANManager::vehicleStateChanged(raw_vehicle_state);
+
+		if (new_data) {
+			stay_in_loop = false;
 		}
 
-		if (ts >= next_10hz_service_at) {
-			next_10hz_service_at += 3000ULL;
-			//state = 8 - state;
-			//set_control_state(state);
-		}
+		// every once in a while: inactivity check here
+		// TODO: inactivity check placeholder
+	}
 
-		groundStateBreathe(old_state);
-		HAL_Delay(20);
+	// read cache and decode — gives us the current flight state
+	flight_state = interpretVehicleState(raw_vehicle_state);
+
+	// placeholder: takes flight_state,
+	// changes LED domain to start pushing new data
+	// TODO: LED domain push logic here
+
+	new_data = false;
+	stay_in_loop = true;
 
 	}
   /* USER CODE END 3 */
@@ -325,7 +278,6 @@ void Error_Handler(void)
  *         where the assert_param error has occurred.
  * @param  file: pointer to the source file name
  * @param  line: assert_param error line source number
- * @retval None
  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
