@@ -29,6 +29,8 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
+#include "pinecanCommon.h" /* PineCAN_Status */
 
 /* USER CODE END Includes */
 
@@ -41,6 +43,11 @@ extern CAN_HandleTypeDef hcan1;
 void MX_CAN1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+
+/* Owned by can.c — see USER CODE BEGIN/END 1 in can.c for definitions. */
+PineCAN_Status initCAN(void);
+void canService(void);
+uint64_t canGetLatestVehicleState(void);
 
 /* USER CODE END Prototypes */
 

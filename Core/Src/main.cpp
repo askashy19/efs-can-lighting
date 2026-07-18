@@ -155,9 +155,10 @@ int main(void)
 
 	initializeNodeId();
 
-	// Initialize CANManager — calls pinecanInit internally.
-	// Handler registration is compile-time via RX_HANDLER_LIST in pinecan_handlers.h.
-	if (CANManager::initialize(node_id, &hcan1, nullptr) != PINECAN_OK) {
+	// Initialize PineCAN — owned by can.c (initCAN), mirroring the
+	// single-servo driver reference. Handler registration is compile-time
+	// via RX_HANDLER_LIST in pinecan_handlers.h.
+	if (initCAN() != PINECAN_OK) {
 		Error_Handler();
 	}
 
@@ -256,9 +257,9 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim->Instance == TIM6) {
-		pinecan1ms_flag = true;
-	}
+	// canService() (Core/Src/can.c) self-gates on HAL_GetTick() now, so no
+	// flag needs to be set here for PineCAN servicing.
+	(void)htim;
 }
 
 /* USER CODE END 4 */

@@ -36,19 +36,21 @@ while (1) {
 /*
  * can_manager.hpp
  *
- * CANManager: single owner of all CAN receive functionality.
- * Structured to absorb transmit and other CAN responsibilities later
- * without changing this interface.
+ * CANManager: the pure, transport-agnostic, testable core of the CAN
+ * receive pipeline. It owns NO PineCAN state and touches NO HAL — PineCAN
+ * init, the 1 ms service, the RX handler, and the async vehicle_state cache
+ * all live in Core/Src/can.c, mirroring the efs-pinecan single-servo driver
+ * reference (its can.c owns initCAN()/handleArrayCommand). CANManager
+ * exposes the pure mapVehicleState mapping, the change detector, and thin
+ * forwarders (getLatestVehicleState / service) to can.c's entry points so
+ * main.cpp has a single, stable call surface regardless of where PineCAN
+ * ownership lives.
  */
 
 #ifndef INC_CAN_MANAGER_HPP_
 #define INC_CAN_MANAGER_HPP_
 
 #include <cstdint>
-#include <functional>
-#include "stm32l4xx_hal.h"
-#include "pinecan.h"
-#include "uavcan.protocol.NodeStatus.h"
 #include "Lighting/Inc/conversions.hpp"
 
 class CANManager {
@@ -56,16 +58,6 @@ public:
     /// Sentinel returned by mapVehicleState when vehicle_state is non-zero
     /// but contains no bit that maps to a LightingStateTransition.
     static constexpr uint8_t UNRECOGNIZED_STATE = 0xFF;
-
-    /// Initialize PineCAN with the given node ID, CAN peripheral, and
-    /// state-consumer callback. Returns PINECAN_OK on success.
-    /// If pinecanInit fails, returns PINECAN_ERROR and the instance is left
-    /// uninitialised — pinecan1ms will not be called.
-    static PineCAN_Status initialize(
-        uint32_t node_id,
-        CAN_HandleTypeDef *hcan,
-        std::function<void(uint8_t)> set_control_state_callback
-    );
 
     /// Pure mapping function.
     /// Converts a 64-bit vehicle_state bitmask from
@@ -88,16 +80,12 @@ public:
     /// HAL-free, PineCAN-free, and side-effect-free.
     static uint8_t mapVehicleState(uint64_t vehicle_state);
 
-    /// Called by the PineCAN handler (handleNotifyState) after a successful
-    /// decode. Stores the raw vehicle_state bitmask into the singleton cache.
-    /// Performs NO mapping and does NOT invoke the consumer callback —
-    /// delivery is done by the main-loop poll via getLatestVehicleState().
-    static void cacheLatestState(uint64_t vehicle_state);
-
     /// Parameterless getter for the poll side.
-    /// Returns the most recently cached raw vehicle_state bitmask
-    /// (last-write-wins). Returns 0 if no message has been received yet.
-    /// Performs NO mapping — pass the result to vehicleStateChanged().
+    /// Forwards to canGetLatestVehicleState() (Core/Src/can.c), which owns
+    /// the actual async cache written by handleNotifyState. Returns the
+    /// most recently cached raw vehicle_state bitmask (last-write-wins), or
+    /// 0 if no message has been received yet. Performs NO mapping — pass
+    /// the result to vehicleStateChanged().
     static uint64_t getLatestVehicleState();
 
     /// Returns true if `raw_vehicle_state` differs from the value seen on the previous call.
@@ -107,36 +95,12 @@ public:
     /// Call this from the main while loop with the result of getLatestVehicleState().
     static bool vehicleStateChanged(uint64_t raw_vehicle_state);
 
-    /// Called from the main loop every iteration. Checks pinecan1ms_flag
-    /// and calls pinecan1ms() when set. No-op if not initialized.
+    /// Called from the main loop every iteration. Forwards to canService()
+    /// (Core/Src/can.c), which gates pinecan1ms() to fire once per
+    /// millisecond and no-ops until initCAN() has succeeded.
     static void service();
 
-    /// (Retained) Bridge to the stored callback, used if a push-delivery
-    /// path is re-enabled in future. Not called from handleNotifyState
-    /// in the current poll model.
-    static void deliverState(uint64_t vehicle_state);
-
 private:
-    CANManager(
-        uint32_t node_id,
-        CAN_HandleTypeDef *hcan,
-        std::function<void(uint8_t)> cb
-    );
-
-    uint32_t node_id_;
-    CanardInstance canard_;
-    uavcan_protocol_NodeStatus node_status_;
-    std::function<void(uint8_t)> callback_;
-
-    /// Cache of the most recently decoded NotifyState.vehicle_state.
-    /// Written by cacheLatestState() in interrupt context; read by
-    /// getLatestVehicleState() in the main loop. volatile prevents the
-    /// compiler from hoisting the read out of the loop.
-    /// NOTE: 64-bit access is not atomic on Cortex-M4 — bracket reads and
-    /// writes with a brief IRQ critical section (__disable_irq / __enable_irq)
-    /// to prevent torn values.
-    volatile uint64_t latest_vehicle_state_ = 0;
-
     /// Previous vehicle_state seen by vehicleStateChanged().
     /// Compared against the current value each poll iteration.
     static uint64_t prev_data_;
@@ -149,9 +113,5 @@ private:
 /// CANManager::UNRECOGNIZED_STATE (0xFF) if no mapped bit is set.
 /// Call this from the main loop after CANManager::vehicleStateChanged() returns true.
 uint8_t interpretVehicleState(uint64_t vehicle_state);
-
-/// Defined in can_manager.cpp. Set true by HAL_TIM_PeriodElapsedCallback
-/// every 1 ms; cleared and consumed by CANManager::service().
-extern volatile bool pinecan1ms_flag;
 
 #endif /* INC_CAN_MANAGER_HPP_ */

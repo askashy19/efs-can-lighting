@@ -21,6 +21,31 @@
 #include "can.h"
 
 /* USER CODE BEGIN 0 */
+#include <stdbool.h>
+#include <stdint.h>
+#include "pinecan.h"
+#include "dronecan_msgs.h"
+#include "ardupilot.indication.NotifyState.h"
+
+/*
+ * PineCAN state — can.c is the single owner of all PineCAN interaction for
+ * this target, mirroring efs-pinecan's single-servo driver reference (its
+ * can.c owns initCAN(), the CanardInstance/NodeStatus, and the RX handler
+ * body). Handler registration is declared in pinecan_handlers.h via
+ * RX_HANDLER_LIST; the handler body is defined below.
+ */
+static CanardInstance canard;
+static struct uavcan_protocol_NodeStatus nodeStatus;
+static bool pinecan_initialized = false;
+
+/*
+ * Async cache: written by handleNotifyState() (interrupt context), read by
+ * canGetLatestVehicleState() (main loop, via CANManager::getLatestVehicleState).
+ * volatile prevents the compiler from hoisting the poll read out of the loop.
+ * 64-bit access is not atomic on Cortex-M4, so reads/writes are bracketed
+ * with a brief IRQ critical section to avoid torn values.
+ */
+static volatile uint64_t latest_vehicle_state = 0;
 
 /* USER CODE END 0 */
 
@@ -118,5 +143,102 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+/*
+ * initCAN
+ *
+ * Builds a PinecanInit from the CubeMX-generated hcan1, sets NodeStatus
+ * defaults, and calls pinecanInit exactly once. Mirrors the single-servo
+ * driver reference's initCAN(). On failure, leaves pinecan_initialized
+ * false so canService() never calls pinecan1ms().
+ */
+PineCAN_Status initCAN(void)
+{
+    nodeStatus.health = UAVCAN_PROTOCOL_NODESTATUS_HEALTH_OK;
+    nodeStatus.mode   = UAVCAN_PROTOCOL_NODESTATUS_MODE_OPERATIONAL;
+    nodeStatus.sub_mode = 0;
+    nodeStatus.vendor_specific_status_code = 0;
+
+    PinecanInit initParams = {
+        .hcan       = &hcan1,
+        .canard     = &canard,
+        .nodeStatus = &nodeStatus
+    };
+
+    PineCAN_Status result = pinecanInit(&initParams);
+    pinecan_initialized = (result == PINECAN_OK);
+    return result;
+}
+
+/*
+ * canService
+ *
+ * Called from the main loop each iteration. Gates pinecan1ms() to fire
+ * once per HAL_GetTick() change (once per millisecond). No-op until
+ * initCAN() has succeeded.
+ */
+void canService(void)
+{
+    static uint32_t lastTick = 0;
+
+    if (!pinecan_initialized) {
+        return;
+    }
+
+    uint32_t now = HAL_GetTick();
+    if (now != lastTick) {
+        lastTick = now;
+        pinecan1ms(); /* TX-queue drain + stale-transfer cleanup + NodeStatus */
+    }
+}
+
+/*
+ * handleNotifyState
+ *
+ * Registered via pinecan_handlers.h (RX_HANDLER_LIST) and dispatched by
+ * PineCAN's onTransferReceived (pinecanCommon.c) when a complete
+ * ardupilot.indication.NotifyState broadcast transfer is received.
+ *
+ * Thin handler — no mapping logic:
+ *   1. Decode the transfer payload into a NotifyState struct.
+ *   2. On success, cache vehicle_state directly (plain C write).
+ *   3. On decode failure, discard silently — cache is unchanged.
+ *
+ * Plain C, no extern "C" needed — can.c is a C translation unit, and
+ * pinecan_handlers.h already declares this prototype for both C and C++
+ * includers via its own extern "C" guard.
+ */
+void handleNotifyState(CanardInstance *ins, CanardRxTransfer *transfer)
+{
+    (void)ins;
+
+    struct ardupilot_indication_NotifyState decoded = {0};
+
+    /* ardupilot_indication_NotifyState_decode returns 0 on success,
+     * non-zero on failure (DSDL convention). */
+    if (ardupilot_indication_NotifyState_decode(transfer, &decoded) != 0) {
+        return; /* decode failure — discard, cache unchanged */
+    }
+
+    __disable_irq();
+    latest_vehicle_state = decoded.vehicle_state;
+    __enable_irq();
+}
+
+/*
+ * canGetLatestVehicleState
+ *
+ * Parameterless getter polled by the main loop (via
+ * CANManager::getLatestVehicleState). Returns 0 before any message has
+ * been received. Performs no mapping.
+ */
+uint64_t canGetLatestVehicleState(void)
+{
+    uint64_t v;
+    __disable_irq();
+    v = latest_vehicle_state;
+    __enable_irq();
+    return v;
+}
 
 /* USER CODE END 1 */
