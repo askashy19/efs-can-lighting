@@ -1,0 +1,47 @@
+{
+	"configurations": [
+		{
+			"name": "REV5",
+			"includePath": [
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Core/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/STM32L4xx_HAL_Driver/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/STM32L4xx_HAL_Driver/Inc/Legacy",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/CMSIS/Device/ST/STM32L4xx/Include",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/CMSIS/Include",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Lighting/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Demos/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Core/dsdlc_generated/include"
+			],
+			"defines": [
+				"USE_HAL_DRIVER",
+				"STM32L431xx",
+				"REV5"
+			],
+			"cStandard": "c11",
+			"cppStandard": "c++17",
+			"intelliSenseMode": "gcc-arm"
+		},
+		{
+			"name": "REV4",
+			"includePath": [
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Core/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/STM32L4xx_HAL_Driver/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/STM32L4xx_HAL_Driver/Inc/Legacy",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/CMSIS/Device/ST/STM32L4xx/Include",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Drivers/CMSIS/Include",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Lighting/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Demos/Inc",
+				"${workspaceFolder}/efs-can-lighting-Tejas-CAN-LED/Core/dsdlc_generated/include"
+			],
+			"defines": [
+				"USE_HAL_DRIVER",
+				"STM32L431xx",
+				"REV4"
+			],
+			"cStandard": "c11",
+			"cppStandard": "c++17",
+			"intelliSenseMode": "gcc-arm"
+		}
+	],
+	"version": 4
+}
