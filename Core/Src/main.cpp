@@ -7,10 +7,13 @@
 /* USER CODE BEGIN Includes */
 #include <time.h>
 #include <stdio.h>
-#include <lighting_demos.hpp>
+// lighting_demos.hpp pulled in the old LightingController demo harness;
+// unused here and no longer part of the active build (see .cproject).
+// #include <lighting_demos.hpp>
 #include <string.h>
 #include "can_manager.hpp"
 #include "pinecan_handlers.h"
+#include "new_lighting_controller.hpp" // PineCAN-driven lighting pipeline: led_init/Select_Pattern/Generate_Leds/Push_Leds
 
 /* USER CODE END Includes */
 
@@ -23,7 +26,10 @@
 //#define ROTATE_LED
 //#define CYCLE_ONE_LED_ON
 //#define CONSTANT_COLOR
-#include "lighting_controller.hpp"
+// Superseded by new_lighting_controller.hpp (included above). The old
+// LightingController class/board object is no longer part of the active
+// build -- Lighting/Src/lighting_controller.cpp is excluded in .cproject.
+// #include "lighting_controller.hpp"
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -71,26 +77,32 @@ void initializeNodeId() {
 	node_id = parts[0] ^ parts[1] ^ parts[2];
 }
 
-extern LightingController board;
-
-void groundStateBreathe(uint8_t state) {
-	if (state == TRANSITION_GROUND) {
-		static uint8_t brightness = 0;
-		static uint8_t brightness_direction = 1;
-		uint8_t brightness_max = 50;
-
-		if (brightness <= 0) {
-			brightness = 0;
-			brightness_direction = 1;
-		} else if (brightness >= brightness_max) {
-			brightness = brightness_max;
-			brightness_direction = -1;
-		}
-		board.set_domain_brightness(CD_BEACON, brightness);
-		board.activate_domain(CD_BEACON);
-		brightness += brightness_direction;
-	}
-}
+// Superseded by new_lighting_controller.cpp: GROUND's CD_BEACON breathing is
+// now driven by new_pattern_table.cpp's ANIM_BREATHE row + update_animations()
+// (reproduces this exact ramp -- 0..50, +-1 per ~20ms). The old `board`
+// object below is no longer part of the active build (see .cproject), so
+// this can no longer link -- kept as comments for reference only.
+//
+// extern LightingController board;
+//
+// void groundStateBreathe(uint8_t state) {
+// 	if (state == TRANSITION_GROUND) {
+// 		static uint8_t brightness = 0;
+// 		static uint8_t brightness_direction = 1;
+// 		uint8_t brightness_max = 50;
+//
+// 		if (brightness <= 0) {
+// 			brightness = 0;
+// 			brightness_direction = 1;
+// 		} else if (brightness >= brightness_max) {
+// 			brightness = brightness_max;
+// 			brightness_direction = -1;
+// 		}
+// 		board.set_domain_brightness(CD_BEACON, brightness);
+// 		board.activate_domain(CD_BEACON);
+// 		brightness += brightness_direction;
+// 	}
+// }
 
 
 /* USER CODE END 0 */
@@ -137,21 +149,26 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim6);
 	HAL_TIM_Base_Start_IT(&htim2);
 
-	board.start_lighting_control(); //start lighting
-	uint8_t all_domains_enabled = (1 << 7);
-	board.configure_allowed_domains(all_domains_enabled);
-
-	//set up the domain colours and brightness
-	board.set_domain_colour_and_brightness(CD_MAIN, PURPLE, 5);
-	board.set_domain_colour_and_brightness(CD_TAXI, WHITE, 99);
-	board.set_domain_colour_and_brightness(CD_LANDING, WHITE, 99);
-	board.set_domain_colour_and_brightness(CD_NAV, BLUE, 99);
-	board.set_domain_colour_and_brightness(CD_BEACON, RED, 99);
-	board.set_domain_colour_and_brightness(CD_STROBE, ORANGE, 99);
-	board.set_domain_colour_and_brightness(CD_BRAKE, ORANGE, 99);
-	board.set_domain_colour_and_brightness(CD_SEARCH, WHITE, 99);
-
-	board.configure_active_domains(255);
+	// Superseded by led_init() below -- board/domain setup, colours, and
+	// brightness now live in Lighting/Src/new_pattern_table.cpp (the single
+	// file to edit for colour/brightness/animation changes). The old
+	// `board` object is no longer part of the active build (see .cproject).
+	//
+	// board.start_lighting_control(); //start lighting
+	// uint8_t all_domains_enabled = (1 << 7);
+	// board.configure_allowed_domains(all_domains_enabled);
+	//
+	// //set up the domain colours and brightness
+	// board.set_domain_colour_and_brightness(CD_MAIN, PURPLE, 5);
+	// board.set_domain_colour_and_brightness(CD_TAXI, WHITE, 99);
+	// board.set_domain_colour_and_brightness(CD_LANDING, WHITE, 99);
+	// board.set_domain_colour_and_brightness(CD_NAV, BLUE, 99);
+	// board.set_domain_colour_and_brightness(CD_BEACON, RED, 99);
+	// board.set_domain_colour_and_brightness(CD_STROBE, ORANGE, 99);
+	// board.set_domain_colour_and_brightness(CD_BRAKE, ORANGE, 99);
+	// board.set_domain_colour_and_brightness(CD_SEARCH, WHITE, 99);
+	//
+	// board.configure_active_domains(255);
 
 	initializeNodeId();
 
@@ -161,6 +178,11 @@ int main(void)
 	if (initCAN() != PINECAN_OK) {
 		Error_Handler();
 	}
+
+	// Initialise the LED PWM/DMA output (bank/DMA buffers, HAL_TIM_PWM_Start_DMA)
+	// and load the GROUND pattern as the boot default, so the board shows a
+	// valid pattern before the first CAN message arrives.
+	led_init();
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -177,8 +199,20 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
 	while (stay_in_loop) {
-		// placeholder: push the domain pattern
-		// start_pattern();
+		// Rate-gate the lighting pipeline to ~50Hz (20ms) rather than running
+		// it flat-out every loop iteration -- matches legacy's ~20ms cadence
+		// without blocking (no HAL_Delay, so CAN servicing below is never
+		// starved). `tick` feeds the animation engine (update_animations() in
+		// new_lighting_controller.cpp) so BREATHE/STROBE advance at a known,
+		// fixed rate regardless of how fast this outer loop otherwise spins.
+		static uint32_t lastLedTick = 0;
+		static uint32_t tick = 0;
+		if (HAL_GetTick() - lastLedTick >= 20) {
+			lastLedTick = HAL_GetTick();
+			Generate_Leds(tick); // advance animations, expand active zones into colour_buffer
+			Push_Leds();         // bit-encode colour_buffer into the DMA-streamed bank buffer
+			tick++;
+		}
 
 		// Service PineCAN housekeeping (1ms tick-gated pinecan1ms call)
 		CANManager::service();
@@ -200,9 +234,11 @@ int main(void)
 	// read cache and decode — gives us the current flight state
 	flight_state = interpretVehicleState(raw_vehicle_state);
 
-	// placeholder: takes flight_state,
-	// changes LED domain to start pushing new data
-	// TODO: LED domain push logic here
+	// Load the new state's pattern row (colour/brightness/animation per zone,
+	// from new_pattern_table.cpp) into current_appearance. Only runs here, on
+	// state change -- per-tick animation and LED output happen continuously
+	// in the inner loop above, independent of how often this outer step runs.
+	Select_Pattern(flight_state);
 
 	new_data = false;
 	stay_in_loop = true;

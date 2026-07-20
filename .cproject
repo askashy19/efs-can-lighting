@@ -104,7 +104,7 @@
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry excluding="Src/rev4_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
+						<entry excluding="Src/lighting_controller.cpp|Src/sk6812.cpp|Src/ws2812.cpp|Src/led.cpp|Src/rev4_lighting_control_state_classes.cpp|Src/rev5_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -216,9 +216,9 @@
 					</folderInfo>
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Demos"/>
+						<entry excluding="Src/lighting_demos.cpp" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Demos"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry excluding="Src/rev4_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
+						<entry excluding="Src/lighting_controller.cpp|Src/sk6812.cpp|Src/ws2812.cpp|Src/led.cpp|Src/rev4_lighting_control_state_classes.cpp|Src/rev5_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -327,7 +327,7 @@
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry excluding="Src/rev5_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
+						<entry excluding="Src/lighting_controller.cpp|Src/sk6812.cpp|Src/ws2812.cpp|Src/led.cpp|Src/rev4_lighting_control_state_classes.cpp|Src/rev5_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -439,9 +439,9 @@
 					</folderInfo>
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Demos"/>
+						<entry excluding="Src/lighting_demos.cpp" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="Demos"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry excluding="Src/rev4_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
+						<entry excluding="Src/lighting_controller.cpp|Src/sk6812.cpp|Src/ws2812.cpp|Src/led.cpp|Src/rev4_lighting_control_state_classes.cpp|Src/rev5_lighting_control_state_classes.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Lighting"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
